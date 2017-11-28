@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"os"
 )
 
-const sampleConfig = `
+const (
+	sampleConfig = `
   ## You can skip the client setup portion of this config if the following environment variables are set:
   ## CLOUDSTACK_API_URL
   ## CLOUDSTACK_API_KEY
@@ -25,25 +27,57 @@ const sampleConfig = `
   ## The api secret key for the cloudstack API. This can also be extracted from CLOUDSTACK_SECRET_KEY
   api_secret_key = ""
 `
+)
 
 // Cloudstack struct Plugin
-type Cloudstack struct {
+type CloudStack struct {
 	client     *http.Client
-	ApiUrl     string
-	APIKey     string
-	SecretKey  string
+	ApiUrl     string `toml:"api_url"`
+	APIKey     string `toml:"api_key"`
+	SecretKey  string `toml:"secret_key"`
 	VerifySsl  bool
 	DomainIds  []string
 	AllDomains bool
 }
 
+// Description will appear directly above the plugin definition in the config file
+func (c *CloudStack) Description() string {
+	return `This plugin queries the CloudStack api listDomains command and grabs domain the data.`
+}
+
+// SampleConfig will populate the sample configuration portion of the plugin's configuration
+func (c *CloudStack) SampleConfig() string {
+	return sampleConfig
+}
+
+func init() {
+	cs := &CloudStack{}
+	inputs.Add("cloudstack", func() telegraf.Input { return cs.newApiConnection() })
+}
+
+
+func (c *CloudStack) checkEnvVariables() {
+	if os.Getenv("CLOUDSTACK_API_URL") != "" {
+		c.ApiUrl = os.Getenv("CLOUDSTACK_API_URL")
+	}
+
+	if os.Getenv("CLOUDSTACK_API_KEY") != "" {
+		c.APIKey = os.Getenv("CLOUDSTACK_API_KEY")
+	}
+
+	if os.Getenv("CLOUDSTACK_SECRET_KEY") != "" {
+		c.SecretKey = os.Getenv("CLOUDSTACK_SECRET_KEY")
+	}
+}
+
 // Create the CS Client
-func (c *Cloudstack) newApiConnection() {
-	newClient(c.ApiUrl, c.APIKey, c.SecretKey, false, c.VerifySsl)
+func (c *CloudStack) newApiConnection() *CloudStack {
+	c.checkEnvVariables()
+	return c.newClient(c.ApiUrl, c.APIKey, c.SecretKey, false, c.VerifySsl)
 }
 
 // Get the Domain data from CS
-func (c *Cloudstack) listDomains() (map[string]interface{}, error) {
+func (c *CloudStack) listDomains() (map[string]interface{}, error) {
 	respJson := make(map[string]interface{})
 	jsonData, err := c.newRequest("listDomains", nil)
 
@@ -61,7 +95,7 @@ func (c *Cloudstack) listDomains() (map[string]interface{}, error) {
 }
 
 // Build all our interfaces for telegraf
-func (c *Cloudstack) buildFields(message map[string]interface{}, acc telegraf.Accumulator) (map[string]interface{}, map[string]string) {
+func (c *CloudStack) buildFields(message map[string]interface{}, acc telegraf.Accumulator) (map[string]interface{}, map[string]string) {
 
 	// Use regex to filter out all the tag fields
 	pattern, _ := regexp.Compile("(haschild|id|name|parentdomainid|parentdomainname|path|state|networkdomain)")
@@ -93,24 +127,9 @@ func (c *Cloudstack) buildFields(message map[string]interface{}, acc telegraf.Ac
 	return fields, tags
 }
 
-func init() {
-	inputs.Add("rancher", func() telegraf.Input { return &Cloudstack{} })
-}
-
-// Description will appear directly above the plugin definition in the config file
-func (c *Cloudstack) Description() string {
-	return `This plugin queries the Cloudstack api listDomains command and grabs domain the data.`
-}
-
-// SampleConfig will populate the sample configuration portion of the plugin's configuration
-func (c *Cloudstack) SampleConfig() string {
-	return sampleConfig
-}
 
 // Gather defines what data the plugin will gather.
-func (c *Cloudstack) Gather(acc telegraf.Accumulator) error {
-	c.newApiConnection()
-
+func (c *CloudStack) Gather(acc telegraf.Accumulator) error {
 	data, err := c.listDomains()
 
 	if err != nil {

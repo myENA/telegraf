@@ -1,5 +1,6 @@
 package cloudstack
 
+
 import (
 	"bytes"
 	"crypto/hmac"
@@ -19,8 +20,8 @@ import (
 //Borrowed from the xanzy/cloudstack library, no need to import the whole thing for one call
 
 //  Build new client
-func newClient(apiurl string, apikey string, secret string, async bool, verifyssl bool) *Cloudstack {
-	cs := &Cloudstack{
+func (c *CloudStack) newClient(apiurl string, apikey string, secret string, async bool, verifyssl bool) *CloudStack {
+	cs := &CloudStack{
 		client: &http.Client{
 			Transport: &http.Transport{
 				Proxy:           http.ProxyFromEnvironment,
@@ -36,7 +37,7 @@ func newClient(apiurl string, apikey string, secret string, async bool, verifyss
 }
 
 // Encode url values
-func encodeValues(v url.Values) string {
+func (c *CloudStack) encodeValues(v url.Values) string {
 	if v == nil {
 		return ""
 	}
@@ -61,7 +62,7 @@ func encodeValues(v url.Values) string {
 }
 
 // Generic function to get the first raw value from a response as json.RawMessage
-func getRawValue(b json.RawMessage) (json.RawMessage, error) {
+func (c *CloudStack) getRawValue(b json.RawMessage) (json.RawMessage, error) {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, err
@@ -73,8 +74,8 @@ func getRawValue(b json.RawMessage) (json.RawMessage, error) {
 }
 
 // CS requuires a signature with the request, this method (borrowed from xanzy) takes care of generating the sig
-func (cs *Cloudstack) newRequest(api string, params url.Values) (json.RawMessage, error) {
-	params.Set("apiKey", cs.APIKey)
+func (c *CloudStack) newRequest(api string, params url.Values) (json.RawMessage, error) {
+	params.Set("apiKey", c.APIKey)
 	params.Set("command", api)
 	params.Set("response", "json")
 
@@ -84,10 +85,10 @@ func (cs *Cloudstack) newRequest(api string, params url.Values) (json.RawMessage
 	// * Replace all instances of '+' to '%20'
 	// * Calculate HMAC SHA1 of argument string with CloudStack secret
 	// * URL encode the string and convert to base64
-	s := encodeValues(params)
+	s := c.encodeValues(params)
 	s2 := strings.ToLower(s)
 	s3 := strings.Replace(s2, "+", "%20", -1)
-	mac := hmac.New(sha1.New, []byte(cs.SecretKey))
+	mac := hmac.New(sha1.New, []byte(c.SecretKey))
 	mac.Write([]byte(s3))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
@@ -95,10 +96,10 @@ func (cs *Cloudstack) newRequest(api string, params url.Values) (json.RawMessage
 	var resp *http.Response
 
 	// Create the final URL before we issue the request
-	url := cs.ApiUrl + "?" + s + "&signature=" + url.QueryEscape(signature)
+	apiUrl := c.ApiUrl + "?" + s + "&signature=" + url.QueryEscape(signature)
 
 	// Make a GET call
-	resp, err = cs.client.Get(url)
+	resp, err = c.client.Get(apiUrl)
 
 	if err != nil {
 		return nil, err
@@ -111,7 +112,7 @@ func (cs *Cloudstack) newRequest(api string, params url.Values) (json.RawMessage
 	}
 
 	// Need to get the raw value to make the result play nice
-	b, err = getRawValue(b)
+	b, err = c.getRawValue(b)
 	if err != nil {
 		return nil, err
 	}
