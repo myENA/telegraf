@@ -108,19 +108,20 @@ func (c *CloudStack) buildFields(message map[string]interface{}, acc telegraf.Ac
 		// Exlude all the fields we will be using for tags
 		if pattern.MatchString(k) {
 			tags[k] = v.(string)
-		}
-
-		// Setting fields that are unlimited to -1 since there is no float value for unlimited
-		if v == "Unlimited" {
-			fields[k] = -1
 		} else {
-			newFloat, err := strconv.ParseFloat(v.(string), 64)
 
-			if err != nil {
-				acc.AddError(fmt.Errorf("error parsing float from %s: %s", v.(string), err))
-				continue
+			// Setting fields that are unlimited to -1 since there is no float value for unlimited
+			if v == "Unlimited" {
+				fields[k] = -1
+			} else {
+				newFloat, err := strconv.ParseFloat(v.(string), 64)
+
+				if err != nil {
+					acc.AddError(fmt.Errorf("error parsing float from %s: %s", v.(string), err))
+					continue
+				}
+				fields[k] = newFloat
 			}
-			fields[k] = newFloat
 		}
 	}
 
